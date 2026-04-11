@@ -4,8 +4,11 @@
 
 // ── 에셋 변수 ──────────────────────────────
 let bus, busStop1, busStop2;
-let street1, street2, street3, street4, street5;
+let street1, street2, street3, street4, street5, street6, street7;
 let bell1, bell1Off, bell2, bell2Off;
+
+// ── 사운드 변수 ───────────────────────────
+let bgMusic, gameOverSound, bellSound;
 
 // ── 배경 레이어 ────────────────────────────
 // 배경은 4개 이미지 중 현재 2장이 나란히 이어짐
@@ -32,24 +35,28 @@ const STOP_W = 172;
 const STOP_H = 89;
 
 // ── 버스 ─────────────────────────────────
-const BUS_W = 417;
-const BUS_H = 131;
+const BUS_W = 487;
+const BUS_H = 153;
 let busY; // setup()에서 계산
 
 // ── 속도 & 게임 상태 ──────────────────────
-let speed = 2;
+let speed = 3;
 const SPEED_INCREMENT = 0.5;
 const SPEED_MAX = 12;
 
 let score = 0;
 let gameOver = false;
-let gameStarted = false; // 타이틀 화면
+let gameStarted = true; // 타이틀 화면 없이 바로 시작
 
 // ── 게임오버 연출 ─────────────────────────
-// 'playing' | 'goingToStop' | 'busExiting' | 'ended'
+// 'playing' | 'goingToStop' | 'busExiting' | 'ended' | 'nameInput'
 let gamePhase = "playing";
-let gameOverStopX = 0; // 게임오버 시 목표 정류장 x (그 정류장까지 달린 뒤 멈춤)
-let busExitX = 100; // 버스 퇴장 x (busExiting 페이즈에서 증가)
+let gameOverStopX = 0;
+let busExitX = 100;
+
+// ── 이름 입력 ────────────────────────────
+let playerName = "";
+let nameInputActive = false;
 
 // ── 속도 변동 (15점 이상) ─────────────────
 let speedVariTimer = 0; // 속도 변동 주기 타이머
@@ -157,12 +164,9 @@ function rndInt(lo, hi) {
 let bgHistory = []; // 최근 선택된 배경 인덱스 기록
 
 function pickBg() {
-  let candidates = [0, 1, 2, 3, 4];
+  let candidates = [0, 1, 2, 3, 4, 5, 6];
   // 최근 2장이 같은 이미지면 그 인덱스 제외
-  if (
-    bgHistory.length >= 2 &&
-    bgHistory[bgHistory.length - 1] === bgHistory[bgHistory.length - 2]
-  ) {
+  if (bgHistory.length >= 1) {
     let blocked = bgHistory[bgHistory.length - 1];
     candidates = candidates.filter((i) => i !== blocked);
   }
@@ -182,10 +186,16 @@ function preload() {
   street3 = loadImage("street3.PNG");
   street4 = loadImage("street4.PNG");
   street5 = loadImage("street5.PNG");
+  street6 = loadImage("street6.PNG");
+  street7 = loadImage("street7.PNG");
   bell1 = loadImage("bell1.png");
   bell1Off = loadImage("bell1Off.png");
   bell2 = loadImage("bell2.png");
   bell2Off = loadImage("bell2Off.png");
+
+  bgMusic = loadSound("bus.mp3");
+  gameOverSound = loadSound("gameover.mp3");
+  bellSound = loadSound("bell.mp3");
 }
 
 // ── setup ────────────────────────────────
@@ -194,17 +204,22 @@ function setup() {
   imageMode(CORNER);
   textFont("monospace");
 
-  bgImgs = [street1, street2, street3, street4, street5];
+  bgImgs = [street1, street2, street3, street4, street5, street6, street7];
   stopImgs = [busStop1, busStop2];
 
-  busY = height - BUS_H - 220; // 버스 Y 고정
+  busY = height - BUS_H - 220;
+
+  bgMusic.setLoop(true);
+  // 브라우저 정책상 클릭 전 자동재생이 막힐 수 있으므로
+  // userStartAudio()로 첫 인터랙션 시 재생 보장
+  userStartAudio();
 
   initGame();
 }
 
 // ── initGame: 게임 상태 초기화 ────────────
 function initGame() {
-  speed = 2;
+  speed = 3;
   score = 0;
   gameOver = false;
   gamePhase = "playing";
@@ -226,6 +241,11 @@ function initGame() {
   stopSequence = buildSequence();
   seqIndex = 0;
 
+  showLeaderboard = false;
+  scoreSaved = false;
+  playerName = "";
+  nameInputActive = false;
+
   bgHistory = [];
   bgSlots = [
     { img: pickBg(), x: 0 },
@@ -241,6 +261,11 @@ function initGame() {
     pendingTargetName = firstTarget.name;
     targetAnnounce.name = firstTarget.name;
     targetAnnounce.timer = TARGET_ANNOUNCE_DURATION;
+  }
+
+  // 배경음악 재시작
+  if (bgMusic && !bgMusic.isPlaying()) {
+    bgMusic.play();
   }
 }
 
@@ -276,11 +301,6 @@ function makeBell(type, isRandom) {
 // ── draw ─────────────────────────────────
 function draw() {
   background(255);
-
-  if (!gameStarted) {
-    drawTitle();
-    return;
-  }
 
   if (gamePhase === "ended") {
     drawGameOver();
@@ -358,6 +378,7 @@ function updateStops() {
 
       if (gamePhase === "waitingForStop") {
         gamePhase = "ended";
+        gameOverSound.play();
       }
     }
   }
@@ -392,7 +413,7 @@ function spawnStop() {
   let img = isStop2 ? busStop2 : busStop1;
   let w = isStop2 ? 35 : STOP_W;
   let h = isStop2 ? 131 : STOP_H;
-  let y = isStop2 ? busY - 32 : busY - 5;
+  let y = isStop2 ? busY - 12 : busY + 30;
 
   // 시퀀스에서 순서대로 꺼냄
   let item = nextSeqItem();
@@ -531,10 +552,10 @@ function drawHUD() {
     let t = announcement.timer;
     let alpha = t < 30 ? map(t, 0, 30, 0, 255) : 255;
 
-    fill(0, 0, 0, alpha * 0.6);
+    fill(22, 24, 35, alpha * 0.6);
     noStroke();
-    rect(width / 2 - 260, 12, 520, 56, 8);
-    fill(255, 220, 80, alpha);
+    rect(width / 2 - 260, 12, 520, 56, 4);
+    fill(255, 226, 98, alpha);
     textAlign(CENTER);
     textSize(14);
     text(`이번 정류장은 [${announcement.currentName}]입니다.`, width / 2, 33);
@@ -549,15 +570,15 @@ function drawHUD() {
     let t = targetAnnounce.timer;
     let alpha = t < 30 ? map(t, 0, 30, 0, 255) : 255;
 
-    fill(180, 20, 20, alpha * 0.9);
+    fill(200, 35, 60, alpha * 0.9);
     noStroke();
-    rect(width / 2 - 200, 78, 400, 52, 8);
+    rect(width / 2 - 200, 78, 400, 52, 4);
     fill(255, alpha);
     textAlign(CENTER);
     textSize(12);
     text("내려야 할 정류장", width / 2, 96);
     textSize(18);
-    fill(255, 240, 80, alpha);
+    fill(255, 226, 98, alpha);
     text(targetAnnounce.name, width / 2, 118);
   }
 }
@@ -586,8 +607,8 @@ function handleBellPress() {
   // 벨 클릭 즉시 켜기 (정답/오답 상관없이)
   bellPressed = true;
   for (let b of bells) b.pressedTimer = 999;
-  // 스페셜 중이면 벨 클릭으로 멈춤
   bellSpecialTimer = 0;
+  bellSound.play();
 
   let target = stops.find((s) => s.isTarget);
   let busRight = 100 + BUS_W;
@@ -624,14 +645,15 @@ function handleBellPress() {
 
 function startGameOverSequence() {
   gameOver = true;
-  // 가장 가까운 정류장이 아직 화면에 있으면 그 정류장까지 달린 후 게임오버
+  bgMusic.stop();
   let nearest = stops
     .filter((s) => s.x > 100 + BUS_W * 0.5)
     .sort((a, b) => a.x - b.x)[0];
   if (nearest) {
-    gamePhase = "waitingForStop"; // updateStops의 passed 감지 후 ended로 전환
+    gamePhase = "waitingForStop";
   } else {
     gamePhase = "ended";
+    gameOverSound.play();
   }
 }
 
@@ -653,41 +675,180 @@ function drawTitle() {
   text("클릭하여 시작", width / 2, height / 2 + 80);
 }
 
-// ── 게임오버 화면 ─────────────────────────
-function drawGameOver() {
-  // 마지막 배경
-  for (let s of bgSlots) image(s.img, s.x, 0, width, height * 0.75);
+// ── Firebase 리더보드 저장 ────────────────
+// index.html에서 Firebase SDK를 로드한 후 sketch.js를 불러와야 함
+async function saveScoreToFirebase(name, s) {
+  try {
+    const { initializeApp, getApps } =
+      await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const { getFirestore, collection, addDoc } =
+      await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
 
-  fill(255);
-  rect(0, 0, width, height);
+    const firebaseConfig = {
+      apiKey: "AIzaSyCwCawEbOgdv6ho_m5nKmadQDe1UcZ8Qsk",
+      authDomain: "busbellgame.firebaseapp.com",
+      projectId: "busbellgame",
+      storageBucket: "busbellgame.firebasestorage.app",
+      messagingSenderId: "407202848461",
+      appId: "1:407202848461:web:ebc53269d1b559770b1384",
+    };
+
+    const app =
+      getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    const db = getFirestore(app);
+    await addDoc(collection(db, "scores"), {
+      name: name || "익명",
+      score: s,
+      date: new Date().toLocaleDateString("ko-KR"),
+      timestamp: Date.now(),
+    });
+    return true;
+  } catch (e) {
+    console.error("Firebase 저장 실패:", e);
+    return false;
+  }
+}
+let scoreSaved = false;
+
+function drawGameOver() {
+  background(255);
 
   textAlign(CENTER, CENTER);
   fill(255, 80, 80);
-  textSize(56);
-  text("GAME OVER", width / 2, height / 2 - 60);
+  textSize(52);
+  text("GAME OVER", width / 2, height / 2 - 130);
 
   fill(20);
-  textSize(28);
-  text(`최종 점수: ${score}`, width / 2, height / 2 + 10);
+  textSize(26);
+  text(`점수: ${score}`, width / 2, height / 2 - 75);
 
-  fill(255, 220, 100);
-  textSize(20);
-  text("클릭하여 다시 시작", width / 2, height / 2 + 70);
+  // 이름 입력창
+  fill(nameInputActive ? color(234, 233, 233) : color(244, 244, 244));
+  rectMode(CENTER);
+  rect(width / 2, height / 2, 320, 46, 3);
+  rectMode(CORNER);
+  noStroke();
+
+  fill(playerName ? 20 : 150);
+  textSize(18);
+  textAlign(CENTER, CENTER);
+  text(
+    playerName
+      ? playerName + (nameInputActive ? "|" : "")
+      : "이름을 입력하세요",
+    width / 2,
+    height / 2,
+  );
+
+  // 기록 저장 버튼
+  let savedColor = scoreSaved ? color(252, 105, 124) : color(105, 140, 141);
+  fill(savedColor);
+  noStroke();
+  rectMode(CENTER);
+  rect(width / 2, height / 2 + 64, 220, 44, 3);
+  rectMode(CORNER);
+  fill(255);
+  textSize(17);
+  textAlign(CENTER, CENTER);
+  text(scoreSaved ? "저장 완료" : "기록 저장", width / 2, height / 2 + 64);
+
+  // 리더보드 버튼
+  fill(51, 53, 75);
+  noStroke();
+  rectMode(CENTER);
+  rect(width / 2, height / 2 + 120, 220, 44, 3);
+  rectMode(CORNER);
+  fill(255);
+  textSize(17);
+  textAlign(CENTER, CENTER);
+  text("순위 보기", width / 2, height / 2 + 120);
+
+  // 다시 시작
+  fill(125, 141, 143);
+  textSize(15);
+  textAlign(CENTER, CENTER);
+  text("다시 시작", width / 2, height / 2 + 185);
 }
 
 // ── 입력 처리 ─────────────────────────────
 function mousePressed() {
+  // 첫 클릭 시 배경음악 재생 (브라우저 자동재생 정책 대응)
+  if (bgMusic && !bgMusic.isPlaying() && !gameOver) {
+    bgMusic.play();
+  }
+
   if (!gameStarted) {
     gameStarted = true;
     initGame();
     return;
   }
+
   if (gamePhase === "ended") {
+    // 이름 입력창 클릭
+    if (
+      mouseX > width / 2 - 160 &&
+      mouseX < width / 2 + 160 &&
+      mouseY > height / 2 - 23 &&
+      mouseY < height / 2 + 23
+    ) {
+      nameInputActive = true;
+      return;
+    }
+
+    // 기록 저장 버튼
+    if (
+      mouseX > width / 2 - 110 &&
+      mouseX < width / 2 + 110 &&
+      mouseY > height / 2 + 42 &&
+      mouseY < height / 2 + 86
+    ) {
+      let name = playerName.trim() || "익명";
+      saveScoreToFirebase(name, score).then((ok) => {
+        if (ok) scoreSaved = true;
+      });
+      nameInputActive = false;
+      return;
+    }
+
+    // 리더보드 버튼 → leaderboard.html 열기
+    if (
+      mouseX > width / 2 - 110 &&
+      mouseX < width / 2 + 110 &&
+      mouseY > height / 2 + 98 &&
+      mouseY < height / 2 + 142
+    ) {
+      window.open("leaderboard.html", "_blank");
+      return;
+    }
+
+    // 다시 시작 텍스트 클릭 or 빈 곳
+    nameInputActive = false;
+    scoreSaved = false;
+    showLeaderboard = false;
+    playerName = "";
     initGame();
     return;
   }
+
   if (gamePhase === "playing") {
     handleBellPress();
+  }
+}
+
+function keyPressed() {
+  if (gamePhase === "ended" && nameInputActive) {
+    if (keyCode === BACKSPACE) {
+      playerName = playerName.slice(0, -1);
+    } else if (keyCode === ENTER) {
+      let name = playerName.trim() || "익명";
+      saveScoreToFirebase(name, score).then((ok) => {
+        if (ok) scoreSaved = true;
+      });
+      nameInputActive = false;
+    } else if (key.length === 1 && playerName.length < 10) {
+      playerName += key;
+    }
+    return false;
   }
 }
 
