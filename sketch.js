@@ -242,7 +242,7 @@ function setup() {
 
 // ── initGame: 게임 상태 초기화 ────────────
 function initGame() {
-  speed = 3;
+  speed = 2.4;
   score = 0;
   gameOver = false;
   gamePhase = "playing";
