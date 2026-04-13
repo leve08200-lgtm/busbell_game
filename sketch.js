@@ -4,7 +4,16 @@
 
 // ── 에셋 변수 ──────────────────────────────
 let bus, busStop1, busStop2;
-let street1, street2, street3, street4, street5, street6, street7;
+let street1,
+  street2,
+  street3,
+  street4,
+  street5,
+  street6,
+  street7,
+  street8,
+  street9,
+  street10;
 let bell1, bell1Off, bell2, bell2Off;
 
 // ── 사운드 변수 ───────────────────────────
@@ -164,7 +173,7 @@ function rndInt(lo, hi) {
 let bgHistory = []; // 최근 선택된 배경 인덱스 기록
 
 function pickBg() {
-  let candidates = [0, 1, 2, 3, 4, 5, 6];
+  let candidates = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
   // 최근 2장이 같은 이미지면 그 인덱스 제외
   if (bgHistory.length >= 1) {
     let blocked = bgHistory[bgHistory.length - 1];
@@ -188,6 +197,9 @@ function preload() {
   street5 = loadImage("street5.PNG");
   street6 = loadImage("street6.PNG");
   street7 = loadImage("street7.PNG");
+  street8 = loadImage("street8.PNG");
+  street9 = loadImage("street9.PNG");
+  street10 = loadImage("street10.PNG");
   bell1 = loadImage("bell1.png");
   bell1Off = loadImage("bell1Off.png");
   bell2 = loadImage("bell2.png");
@@ -204,7 +216,18 @@ function setup() {
   imageMode(CORNER);
   textFont("monospace");
 
-  bgImgs = [street1, street2, street3, street4, street5, street6, street7];
+  bgImgs = [
+    street1,
+    street2,
+    street3,
+    street4,
+    street5,
+    street6,
+    street7,
+    street8,
+    street9,
+    street10,
+  ];
   stopImgs = [busStop1, busStop2];
 
   busY = height - BUS_H - 220;
