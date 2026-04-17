@@ -131,9 +131,7 @@ const STOP_NAMES = [
 ];
 
 // ── 정류장 시퀀스 ─────────────────────────
-// 게임 시작 시 전체 순서를 배열로 만들어두고 순서대로 스폰
-// [{name, isTarget}, ...]
-let stopSequence = [];
+let stopSequence = []; // 앞으로 스폰될 항목 큐
 let seqIndex = 0;
 
 function buildSequence() {
@@ -141,12 +139,10 @@ function buildSequence() {
   let seq = [];
   let i = 0;
   while (i < names.length) {
-    // 일반 정류장 1~3개
     let gap = rndInt(1, 3);
     for (let g = 0; g < gap && i < names.length; g++, i++) {
       seq.push({ name: names[i], isTarget: false });
     }
-    // 목표 정류장 1개
     if (i < names.length) {
       seq.push({ name: names[i], isTarget: true });
       i++;
@@ -155,18 +151,22 @@ function buildSequence() {
   return seq;
 }
 
-function nextSeqItem() {
-  if (seqIndex >= stopSequence.length) {
-    stopSequence = buildSequence();
+// 큐가 20개 이하로 줄면 새 시퀀스를 뒤에 추가
+function refillIfNeeded() {
+  if (stopSequence.length - seqIndex < 20) {
+    stopSequence = stopSequence.slice(seqIndex).concat(buildSequence());
     seqIndex = 0;
-    // 새 시퀀스의 첫 목표를 pendingTargetName으로 미리 설정
-    let ft = stopSequence.find((s) => s.isTarget);
-    if (ft) {
-      pendingTargetName = ft.name;
-      targetAnnounce.name = ft.name;
-    }
   }
+}
+
+function nextSeqItem() {
+  refillIfNeeded();
   return stopSequence[seqIndex++];
+}
+
+function peekSeqItem(offset) {
+  refillIfNeeded();
+  return stopSequence[seqIndex + offset];
 }
 
 // ── 안내방송 관련 ─────────────────────────
@@ -305,8 +305,8 @@ function initGame() {
   nextGhostScore = 0;
   spawnCounter = 0;
 
-  // 시퀀스 초기화
-  stopSequence = buildSequence();
+  // 시퀀스 초기화 - 미리 2개 이어붙여서 전환 시점 문제 방지
+  stopSequence = buildSequence().concat(buildSequence());
   seqIndex = 0;
 
   showLeaderboard = false;
@@ -505,19 +505,11 @@ function spawnStop() {
   if (item.isTarget) {
     pendingTargetName = item.name;
     targetAnnounce.name = item.name;
-    // 타이머는 켜지 않음 (목표 통과 후에만 표시)
   }
 
-  // 다음에 나올 이름을 지금 peek해서 저장 (안내방송용)
-  // 단, 시퀀스 끝이면 다음 시퀀스 첫 이름
-  let peekIdx = seqIndex;
-  let nextItemName;
-  if (peekIdx < stopSequence.length) {
-    nextItemName = stopSequence[peekIdx].name;
-  } else {
-    // 시퀀스 끝 - 다음 시퀀스 첫 이름은 알 수 없으므로 pendingTargetName 사용
-    nextItemName = pendingTargetName || "-";
-  }
+  // 다음에 나올 이름을 peek해서 저장 (안내방송용)
+  let nextItem = peekSeqItem(0);
+  let nextItemName = nextItem ? nextItem.name : "-";
 
   let newStop = {
     img,
@@ -757,7 +749,6 @@ function handleBellPress() {
   }
 
   // 다음 목표 이름 설정
-  // stops에 아직 통과 안 한 isTarget 정류장이 있으면 그걸 사용
   let nextTarget = stops.find(
     (s) => s.isTarget && !s.passed && s.x > 100 + BUS_W,
   );
@@ -765,24 +756,13 @@ function handleBellPress() {
     pendingTargetName = nextTarget.name;
     targetAnnounce.name = nextTarget.name;
   } else {
-    // 아직 스폰 안 됐으면 시퀀스에서 다음 isTarget 이름 peek
-    // seqIndex는 이미 꺼낸 다음을 가리키므로 여기서부터 탐색
-    let found = false;
+    // 아직 스폰 안 됐으면 큐에서 다음 isTarget 탐색
+    refillIfNeeded();
     for (let i = seqIndex; i < stopSequence.length; i++) {
       if (stopSequence[i].isTarget) {
         pendingTargetName = stopSequence[i].name;
         targetAnnounce.name = stopSequence[i].name;
-        found = true;
         break;
-      }
-    }
-    // 현재 시퀀스에 없으면 다음 시퀀스 첫 번째 목표
-    if (!found) {
-      let nextSeq = buildSequence();
-      let firstTarget = nextSeq.find((s) => s.isTarget);
-      if (firstTarget) {
-        pendingTargetName = firstTarget.name;
-        targetAnnounce.name = firstTarget.name;
       }
     }
   }

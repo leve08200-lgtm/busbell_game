@@ -11,6 +11,7 @@
         box-sizing: border-box;
       }
       body {
+        font-family: "Gowun Dodum", sans-serif;
         margin: 0;
         display: flex;
         flex-direction: column;
@@ -18,59 +19,60 @@
         align-items: center;
         min-height: 100vh;
         background: #ffffff;
-        font-family: "Gowun Dodum";
       }
       h1 {
-        font-size: 2rem;
+        font-size: 1.3rem;
         color: rgb(32, 33, 47);
-        margin-bottom: 6px;
+        margin-top: 100px;
+        /*margin-bottom: 6px;*/
       }
       .subtitle {
-        color: #8a8f8e;
-        font-size: 0.95rem;
-        margin-bottom: 32px;
+        position: absolute;
+        top: 22%;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-size: 1.4vw;
+        font-weight: bold;
+        color: #131416;
       }
       .wrapper {
         position: relative;
-        width: 840px; /* scoreScreen.png 가로 크기에 맞게 조절 */
-        height: 700px; /* scoreScreen.png 세로 크기에 맞게 조절 */
+        width: 58.9vw;
+        aspect-ratio: 840 / 700;
+        height: auto;
         background: url("scoreScreen.png") no-repeat center / contain;
-        margin: 0 auto; /* 추가 */
+        margin: 0 auto;
       }
       .board-header {
-        background: #1d1d26;
-        color: #fff;
-        padding: 16px 24px;
-        font-size: 1.1rem;
+        color: #191818;
+        padding: 100px 24px;
+        left: 50%;
+        font-size: 1.1vw;
         font-weight: bold;
         display: flex;
-        justify-content: space-between;
+        text-align: center;
       }
       .board-list {
         position: absolute;
-        top: 200px; /* 글자 시작 위치, 이미지 보면서 조절 */
+        top: 28%;
         left: 50%;
         transform: translateX(-50%);
-        width: 80%;
+        width: 40%;
         text-align: center;
-      }
-      .entry {
-        margin-bottom: 20px;
-        font-size: 1rem;
-        color: #222;
       }
       .entry {
         display: flex;
         align-items: center;
-        padding: 15px 25px;
-        border-bottom: 1px solid #f9f9f9;
+        padding: 1.4vw 1.4vw;
+        border-bottom: 1px solid #161515;
       }
       .entry:last-child {
         border-bottom: none;
       }
       .rank {
-        font-size: 1.4rem;
-        width: 44px;
+        font-size: 1.3vw;
+        width: 3vw;
         font-weight: bold;
         color: #899696;
       }
@@ -85,20 +87,20 @@
       }
       .name {
         flex: 1;
-        font-size: 1rem;
+        font-size: 1.1vw;
         color: #16161a;
         font-weight: 500;
       }
       .score {
-        font-size: 1.1rem;
+        font-size: 1.2vw;
         font-weight: bold;
         color: #d92c4f;
-        margin-right: 16px;
+        margin-right: 0.7vw;
       }
       .date {
-        font-size: 0.8rem;
+        font-size: 0.8vw;
         color: #b2b8b8;
-        min-width: 72px;
+        min-width: 4vw;
         text-align: right;
       }
       .empty {
@@ -120,40 +122,56 @@
         border-radius: 4px;
         font-size: 1rem;
         cursor: pointer;
-        color: #fff;
+        font-family: "Gowun Dodum", sans-serif;
+        color: #151516;
         text-decoration: none;
         display: inline-block;
+        transition: transform 0.15s ease;
       }
+      .btn:hover {
+        transform: scale(1.03);
+      }
+
       .btn-refresh {
-        background: #f33359;
+        background: url("button1.png") no-repeat center / contain;
       }
       .btn-refresh:hover {
-        background: #e2264b;
+        background: url("button1.png") no-repeat center / contain;
       }
       .btn-back {
-        background: rgb(48, 49, 67);
+        background: url("button2.png") no-repeat center / contain;
         margin-top: 12px;
       }
       .btn-back:hover {
-        background: rgb(32, 33, 47);
+        background: url("button2.png") no-repeat center / contain;
       }
       .btns {
+        position: fixed;
+        right: 40px; /* 오른쪽 여백 조절 */
+        bottom: 40px; /* 아래 여백 조절 */
         display: flex;
         flex-direction: column;
-        align-items: center;
+        gap: 12px;
+        align-items: flex-end;
       }
     </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <h1 class="subtitle">전체 플레이어 상위 5명</h1>
-
+    <!--<h1 class="subtitle">전체 플레이어 상위 5명</h1>-->
     <div class="wrapper">
+      <p class="subtitle">전체 플레이어 상위 5명</p>
       <div class="board-list" id="boardList"></div>
     </div>
 
     <div class="btns">
       <button class="btn btn-refresh" onclick="loadBoard()">새로고침</button>
-      <a class="btn btn-back" href="index.html">← 게임으로 돌아가기</a>
+      <a class="btn btn-back" href="index.html">돌아가기</a>
     </div>
 
     <script type="module">
@@ -208,7 +226,7 @@
           const snap = await getDocs(q);
           if (snap.empty) {
             list.innerHTML =
-              '<div class="empty">아직 기록이 없어요!<br>게임을 플레이하고 이름을 남겨보세요 🎮</div>';
+              '<div class="empty">아직 기록이 없어요!<br>게임을 플레이하고 이름을 남겨보세요</div>';
             return;
           }
           let html = "";
@@ -224,7 +242,7 @@
           });
           list.innerHTML = html;
         } catch (e) {
-          list.innerHTML = `<div class="empty">불러오기 실패 😢<br>${e.message}</div>`;
+          list.innerHTML = `<div class="empty">불러오기 실패<br>${e.message}</div>`;
         }
       }
 
