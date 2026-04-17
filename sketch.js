@@ -453,6 +453,7 @@ function updateStops() {
       // 목표 정류장 정답 통과 → 다음 목표 안내 + 스페셜 발동
       if (s.wasTarget) {
         targetAnnounce.timer = TARGET_ANNOUNCE_DURATION;
+        pickStageSpeed();
         if (score % 5 === 0 && bellSpecialTimer === 0) {
           bellSpecialTimer = 1;
           moveBellRandom();
@@ -475,19 +476,21 @@ function updateStops() {
   }
 }
 
-// ── 속도 변동 (15점 이상) ─────────────────
-function updateSpeedVariation() {
-  if (score < 15) return;
-  speedVariTimer++;
-  if (speedVariTimer >= speedVariPeriod) {
-    speedVariTimer = 0;
-    speedVariDir *= -1;
-    speedVariPeriod = rndInt(120, 200); // 다음 주기만 여기서 뽑음
+// ── 스테이지 속도 ────────────────────────
+function pickStageSpeed() {
+  if (score < 13) {
+    // 13점 이하: 점수마다 고정 증가
+    speed = min(2.4 + score * 0.5, SPEED_MAX);
+  } else {
+    // 13점 이후: 스테이지마다 랜덤
+    let base = 2.4 + score * 0.18;
+    let variation = rndInt(-5, 5) * 0.1;
+    speed = min(max(base + variation, 2), SPEED_MAX);
   }
-  let baseSpeed = 2 + score * 0.3;
-  let targetSpeed =
-    speedVariDir === 1 ? min(baseSpeed + 2, SPEED_MAX) : max(baseSpeed - 2, 1);
-  speed = lerp(speed, targetSpeed, 0.02);
+}
+
+function updateSpeedVariation() {
+  // 스테이지별 고정 속도 방식으로 교체됨
 }
 
 // 정류장 하나 스폰
@@ -566,6 +569,8 @@ function updateBells() {
     if (target && target.x > 100 + BUS_W + 200) {
       ghostBellActive = true;
       bellSound.play();
+    } else if (!target) {
+      // 타겟이 아직 없으면 잠시 대기 (다음 프레임에 재시도)
     }
   }
 }
@@ -736,16 +741,17 @@ function handleBellPress() {
   if (ghostBellPenalty) {
     speed = 2;
     ghostBellPenalty = false;
-  } else {
-    speed = min(speed + SPEED_INCREMENT, SPEED_MAX);
   }
+  // 속도는 목표 정류장 통과(wasTarget passed) 시점에 pickStageSpeed()로 설정됨
   target.isTarget = false;
   target.wasTarget = true;
   ghostBellActive = false;
 
-  // 15점 이후 다음 유령 벨 발동 점수 설정
-  if (score >= 15 && nextGhostScore <= score) {
-    nextGhostScore = score + rndInt(4, 6);
+  // 15점 도달 시 또는 이후 nextGhostScore 설정
+  if (score >= 15) {
+    if (nextGhostScore <= score) {
+      nextGhostScore = score + rndInt(4, 6);
+    }
   }
 
   // 다음 목표 이름 설정
