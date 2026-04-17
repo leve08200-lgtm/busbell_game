@@ -74,6 +74,7 @@ let nameInput; // HTML input 요소
 // ── 속도 변동 (15점 이상) ─────────────────
 let speedVariTimer = 0; // 속도 변동 주기 타이머
 let speedVariDir = 1; // 1: 빠르게, -1: 느리게
+let speedVariPeriod = 160; // 방향 전환 주기 (전환 시점에만 새로 뽑음)
 
 // ── 벨 스페셜 스테이지 ───────────────────
 let bellSpecialTimer = 0; // 스페셜 남은 프레임 (>0이면 벨 움직이는 중)
@@ -158,6 +159,12 @@ function nextSeqItem() {
   if (seqIndex >= stopSequence.length) {
     stopSequence = buildSequence();
     seqIndex = 0;
+    // 새 시퀀스의 첫 목표를 pendingTargetName으로 미리 설정
+    let ft = stopSequence.find((s) => s.isTarget);
+    if (ft) {
+      pendingTargetName = ft.name;
+      targetAnnounce.name = ft.name;
+    }
   }
   return stopSequence[seqIndex++];
 }
@@ -283,6 +290,7 @@ function initGame() {
   busExitX = 100;
   speedVariTimer = 0;
   speedVariDir = 1;
+  speedVariPeriod = 160;
   stops = [];
   targetStopIndex = -1;
   bellPressed = false;
@@ -319,12 +327,15 @@ function initGame() {
   let bellType = rndInt(0, 1) === 0 ? "1" : "2";
   bells = [makeBell(bellType, false)];
 
-  // 첫 목표 이름 미리 표시 (시퀀스에서 첫 isTarget 항목)
-  let firstTarget = stopSequence.find((s) => s.isTarget);
-  if (firstTarget) {
-    pendingTargetName = firstTarget.name;
-    targetAnnounce.name = firstTarget.name;
-    targetAnnounce.timer = TARGET_ANNOUNCE_DURATION;
+  // 첫 목표 이름: seqIndex=0부터 순서대로 첫 isTarget
+  pendingTargetName = "";
+  for (let i = 0; i < stopSequence.length; i++) {
+    if (stopSequence[i].isTarget) {
+      pendingTargetName = stopSequence[i].name;
+      targetAnnounce.name = stopSequence[i].name;
+      targetAnnounce.timer = TARGET_ANNOUNCE_DURATION;
+      break;
+    }
   }
 
   // 배경음악 재시작
@@ -468,10 +479,10 @@ function updateStops() {
 function updateSpeedVariation() {
   if (score < 15) return;
   speedVariTimer++;
-  let period = rndInt(120, 200);
-  if (speedVariTimer >= period) {
+  if (speedVariTimer >= speedVariPeriod) {
     speedVariTimer = 0;
     speedVariDir *= -1;
+    speedVariPeriod = rndInt(120, 200); // 다음 주기만 여기서 뽑음
   }
   let baseSpeed = 2 + score * 0.3;
   let targetSpeed =
@@ -524,9 +535,12 @@ function spawnStop() {
   };
 
   // 직전 스폰된 정류장의 nextName을 이번 정류장 이름으로 확정
-  // (직전 정류장 스폰 시 peek이 정확했더라도 한번 더 덮어쓰기)
+  // 단, 이미 안내방송이 나간 정류장은 덮어쓰지 않음
   if (stops.length > 0) {
-    stops[stops.length - 1].nextName = item.name;
+    let prev = stops[stops.length - 1];
+    if (!prev.announced) {
+      prev.nextName = item.name;
+    }
   }
 
   stops.push(newStop);
@@ -743,16 +757,32 @@ function handleBellPress() {
   }
 
   // 다음 목표 이름 설정
-  let nextTarget = stops.find((s) => s.isTarget && s.x > 100 + BUS_W);
+  // stops에 아직 통과 안 한 isTarget 정류장이 있으면 그걸 사용
+  let nextTarget = stops.find(
+    (s) => s.isTarget && !s.passed && s.x > 100 + BUS_W,
+  );
   if (nextTarget) {
     pendingTargetName = nextTarget.name;
     targetAnnounce.name = nextTarget.name;
   } else {
+    // 아직 스폰 안 됐으면 시퀀스에서 다음 isTarget 이름 peek
+    // seqIndex는 이미 꺼낸 다음을 가리키므로 여기서부터 탐색
+    let found = false;
     for (let i = seqIndex; i < stopSequence.length; i++) {
       if (stopSequence[i].isTarget) {
         pendingTargetName = stopSequence[i].name;
         targetAnnounce.name = stopSequence[i].name;
+        found = true;
         break;
+      }
+    }
+    // 현재 시퀀스에 없으면 다음 시퀀스 첫 번째 목표
+    if (!found) {
+      let nextSeq = buildSequence();
+      let firstTarget = nextSeq.find((s) => s.isTarget);
+      if (firstTarget) {
+        pendingTargetName = firstTarget.name;
+        targetAnnounce.name = firstTarget.name;
       }
     }
   }
