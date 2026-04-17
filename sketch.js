@@ -15,6 +15,9 @@ let street1,
   street9,
   street10;
 let bell1, bell1Off, bell2, bell2Off;
+let button1, button2, button3;
+let gameOverImg;
+let nametag;
 
 // ── 사운드 변수 ───────────────────────────
 let bgMusic, gameOverSound, bellSound;
@@ -49,7 +52,7 @@ const BUS_H = 153;
 let busY; // setup()에서 계산
 
 // ── 속도 & 게임 상태 ──────────────────────
-let speed = 3;
+let speed = 2.4;
 const SPEED_INCREMENT = 0.5;
 const SPEED_MAX = 12;
 
@@ -66,6 +69,7 @@ let busExitX = 100;
 // ── 이름 입력 ────────────────────────────
 let playerName = "";
 let nameInputActive = false;
+let nameInput; // HTML input 요소
 
 // ── 속도 변동 (15점 이상) ─────────────────
 let speedVariTimer = 0; // 속도 변동 주기 타이머
@@ -75,6 +79,11 @@ let speedVariDir = 1; // 1: 빠르게, -1: 느리게
 let bellSpecialTimer = 0; // 스페셜 남은 프레임 (>0이면 벨 움직이는 중)
 const BELL_SPECIAL_DURATION = 180; // 3초
 let lastSpecialScore = 0; // 마지막 스페셜 발동 점수
+
+// ── 유령 벨 이벤트 (15점 이후 랜덤 발생) ──
+let ghostBellActive = false; // 다른 승객이 벨을 누른 상태
+let ghostBellPenalty = false; // 유저가 중복으로 눌러서 패널티 중
+let nextGhostScore = 0; // 다음 유령 벨 발동 점수
 
 // ── 벨 버튼 (동적 위치/크기) ──────────────
 // 기본 벨: 화면 하단 왼쪽 / 보조벨(bell2): 점수 오르면 랜덤 등장
@@ -164,7 +173,10 @@ const TARGET_ANNOUNCE_DURATION = 170;
 let spawnCounter = 0;
 let pendingTargetName = "";
 
-// ── 유틸: 랜덤 정수 ──────────────────────
+// ── 기준 해상도 (모든 좌표는 이 크기 기준) ──
+const BASE_W = 1440;
+const BASE_H = 717;
+let scaleRatio = 1;
 function rndInt(lo, hi) {
   return Math.floor(Math.random() * (hi - lo + 1)) + lo;
 }
@@ -208,13 +220,18 @@ function preload() {
   bgMusic = loadSound("bus.mp3");
   gameOverSound = loadSound("gameover.mp3");
   bellSound = loadSound("bell.mp3");
+  gameOverImg = loadImage("GameOver.png");
+  button1 = loadImage("button1.png");
+  button2 = loadImage("button2.png");
+  button3 = loadImage("button_circle.png");
+  nametag = loadImage("name.png");
 }
 
 // ── setup ────────────────────────────────
 function setup() {
   createCanvas(windowWidth, windowHeight);
   imageMode(CORNER);
-  textFont("monospace");
+  textFont("Gowun Dodum");
 
   bgImgs = [
     street1,
@@ -230,12 +247,29 @@ function setup() {
   ];
   stopImgs = [busStop1, busStop2];
 
-  busY = height - BUS_H - 220;
+  scaleRatio = min(windowWidth / BASE_W, windowHeight / BASE_H);
+  busY = BASE_H - BUS_H - 220;
 
   bgMusic.setLoop(true);
-  // 브라우저 정책상 클릭 전 자동재생이 막힐 수 있으므로
-  // userStartAudio()로 첫 인터랙션 시 재생 보장
   userStartAudio();
+
+  // 한글 입력을 위한 HTML input 요소 생성
+  nameInput = createInput("");
+  nameInput.attribute("placeholder", "이름을 입력하세요");
+  nameInput.attribute("maxlength", "10");
+  nameInput.style("position", "absolute");
+  nameInput.style("font-size", "18px");
+  nameInput.style("font-family", "Gowun Dodum");
+  nameInput.style("border", "none");
+  nameInput.style("outline", "none");
+  nameInput.style("background", "transparent");
+  nameInput.style("text-align", "center");
+  nameInput.style("color", "#141414");
+  nameInput.style("width", "300px");
+  nameInput.hide();
+  nameInput.input(() => {
+    playerName = nameInput.value();
+  });
 
   initGame();
 }
@@ -258,6 +292,9 @@ function initGame() {
   pendingTargetName = "";
   bellSpecialTimer = 0;
   lastSpecialScore = 0;
+  ghostBellActive = false;
+  ghostBellPenalty = false;
+  nextGhostScore = 0;
   spawnCounter = 0;
 
   // 시퀀스 초기화
@@ -268,11 +305,15 @@ function initGame() {
   scoreSaved = false;
   playerName = "";
   nameInputActive = false;
+  if (nameInput) {
+    nameInput.value("");
+    nameInput.hide();
+  }
 
   bgHistory = [];
   bgSlots = [
     { img: pickBg(), x: 0 },
-    { img: pickBg(), x: width },
+    { img: pickBg(), x: BASE_W },
   ];
 
   let bellType = rndInt(0, 1) === 0 ? "1" : "2";
@@ -305,7 +346,7 @@ function makeBell(type, isRandom) {
       h = 135; // bell1: 기존 비율
     }
     x = 80;
-    y = height - h - 30;
+    y = BASE_H - h - 30;
   } else {
     if (type === "2") {
       let s = rndInt(45, 90);
@@ -315,15 +356,22 @@ function makeBell(type, isRandom) {
       w = rndInt(60, 110);
       h = Math.round(w * 1.5);
     }
-    x = rndInt(50, width - w - 50);
-    y = rndInt(height * 0.5, height - h - 20);
+    x = rndInt(50, BASE_W - w - 50);
+    y = rndInt(BASE_H * 0.5, BASE_H - h - 20);
   }
   return { x, y, w, h, type, active: true, pressedTimer: 0 };
 }
 
 // ── draw ─────────────────────────────────
 function draw() {
-  background(255);
+  // 레터박스 배경
+  background(30);
+
+  // 기준 해상도 기준으로 가운데 정렬 후 스케일
+  let offsetX = (windowWidth - BASE_W * scaleRatio) / 2;
+  let offsetY = (windowHeight - BASE_H * scaleRatio) / 2;
+  translate(offsetX, offsetY);
+  scale(scaleRatio);
 
   if (gamePhase === "ended") {
     drawGameOver();
@@ -352,8 +400,8 @@ function draw() {
 // ── 배경 업데이트 ─────────────────────────
 function updateBackground() {
   for (let s of bgSlots) s.x -= speed;
-  if (bgSlots[0].x <= -width) {
-    bgSlots[0].x = bgSlots[1].x + width;
+  if (bgSlots[0].x <= -BASE_W) {
+    bgSlots[0].x = bgSlots[1].x + BASE_W;
     bgSlots[0].img = pickBg();
     let tmp = bgSlots[0];
     bgSlots[0] = bgSlots[1];
@@ -382,6 +430,7 @@ function updateStops() {
 
       // 벨 초기화 (정류장 통과 시)
       bellPressed = false;
+      ghostBellActive = false;
       for (let b of bells) b.pressedTimer = 0;
 
       // 목표 정류장을 벨 안 누르고 지나침 → 게임오버
@@ -432,11 +481,12 @@ function updateSpeedVariation() {
 
 // 정류장 하나 스폰
 function spawnStop() {
+  let bgBottom = BASE_H * 2 * (615 / 1326) - 80;
   let isStop2 = rndInt(0, 1) === 1;
   let img = isStop2 ? busStop2 : busStop1;
   let w = isStop2 ? 35 : STOP_W;
   let h = isStop2 ? 131 : STOP_H;
-  let y = isStop2 ? busY - 12 : busY + 30;
+  let y = isStop2 ? bgBottom - 256 : bgBottom - 210;
 
   // 시퀀스에서 순서대로 꺼냄
   let item = nextSeqItem();
@@ -460,7 +510,7 @@ function spawnStop() {
 
   let newStop = {
     img,
-    x: width + 50,
+    x: BASE_W + 50,
     y,
     w,
     h,
@@ -485,8 +535,9 @@ function spawnStop() {
 // ── 벨 업데이트 ───────────────────────────
 function updateBells() {
   for (let b of bells) {
-    if (b.pressedTimer > 0 && !bellPressed) b.pressedTimer--;
-    if (bellPressed) b.pressedTimer = 999;
+    if (b.pressedTimer > 0 && !bellPressed && !ghostBellActive)
+      b.pressedTimer--;
+    if (bellPressed || ghostBellActive) b.pressedTimer = 999;
   }
 
   // 스페셜 중이면 60프레임마다 벨 이동
@@ -494,6 +545,21 @@ function updateBells() {
     bellSpecialTimer++;
     if (bellSpecialTimer % 60 === 0) {
       moveBellRandom();
+    }
+  }
+
+  // 유령 벨: 15점 이후 nextGhostScore 도달 시 자동으로 벨 켜짐
+  if (
+    score >= 15 &&
+    !ghostBellActive &&
+    !bellPressed &&
+    nextGhostScore > 0 &&
+    score >= nextGhostScore
+  ) {
+    let target = stops.find((s) => s.isTarget);
+    if (target && target.x > 100 + BUS_W + 200) {
+      ghostBellActive = true;
+      bellSound.play();
     }
   }
 }
@@ -510,14 +576,14 @@ function moveBellRandom() {
     b.h = Math.round(b.w * 1.5);
   }
   if (score < 10) {
-    b.x = rndInt(30, width * 0.5 - b.w);
-    b.y = rndInt(height * 0.75, height - b.h - 20);
+    b.x = rndInt(30, BASE_W * 0.5 - b.w);
+    b.y = rndInt(BASE_H * 0.75, BASE_H - b.h - 20);
   } else if (score < 15) {
-    b.x = rndInt(30, width - b.w - 30);
-    b.y = rndInt(height * 0.55, height - b.h - 20);
+    b.x = rndInt(30, BASE_W - b.w - 30);
+    b.y = rndInt(BASE_H * 0.55, BASE_H - b.h - 20);
   } else {
-    b.x = rndInt(30, width - b.w - 30);
-    b.y = rndInt(height * 0.35, height - b.h - 20);
+    b.x = rndInt(30, BASE_W - b.w - 30);
+    b.y = rndInt(BASE_H * 0.35, BASE_H - b.h - 20);
   }
 }
 // ── 씬 그리기 ────────
@@ -527,9 +593,9 @@ function drawScene(busX) {
   background(255);
 
   // 배경 이미지: 1326:615 비율 유지, y=-20
-  let bgH = height * 2 * (615 / 1326); // 비율 환산 (여유 포함)
+  let bgH = BASE_H * 2 * (615 / 1326); // 비율 환산 (여유 포함)
   for (let s of bgSlots) {
-    image(s.img, s.x, -80, width, bgH);
+    image(s.img, s.x, -80, BASE_W, bgH);
   }
 
   // 정류장
@@ -551,7 +617,7 @@ function drawScene(busX) {
   // 벨 버튼들
   for (let b of bells) {
     if (!b.active) continue;
-    let isPressed = bellPressed || b.pressedTimer > 0;
+    let isPressed = bellPressed || ghostBellActive || b.pressedTimer > 0;
     if (b.type === "1") {
       image(isPressed ? bell1 : bell1Off, b.x, b.y, b.w, b.h);
     } else {
@@ -566,8 +632,10 @@ function drawHUD() {
   fill(30);
   noStroke();
   textSize(22);
+  textStyle(BOLD);
   textAlign(RIGHT);
-  text(`SCORE: ${score}`, width - 20, 40);
+  text(`SCORE: ${score}`, BASE_W - 20, 40);
+  textStyle(NORMAL);
 
   // ── 안내방송 (항상 표시, 타이머 있을 때) ──
   if (announcement.timer > 0) {
@@ -577,14 +645,16 @@ function drawHUD() {
 
     fill(22, 24, 35, alpha * 0.6);
     noStroke();
-    rect(width / 2 - 260, 12, 520, 56, 4);
+    rect(BASE_W / 2 - 260, 12, 520, 56, 7);
     fill(255, 226, 98, alpha);
     textAlign(CENTER);
-    textSize(14);
-    text(`이번 정류장은 [${announcement.currentName}]입니다.`, width / 2, 33);
+    textStyle(BOLD);
+    textSize(15);
+    text(`이번 정류장은 [${announcement.currentName}]입니다.`, BASE_W / 2, 33);
     fill(255, 255, 255, alpha);
     textSize(13);
-    text(`다음 정류장은 [${announcement.nextName}]입니다.`, width / 2, 54);
+    text(`다음 정류장은 [${announcement.nextName}]입니다.`, BASE_W / 2, 56);
+    textStyle(NORMAL);
   }
 
   // ── 목표 정류장 안내 (안내방송 아래에 별도 표시) ──
@@ -595,14 +665,16 @@ function drawHUD() {
 
     fill(200, 35, 60, alpha * 0.9);
     noStroke();
-    rect(width / 2 - 200, 78, 400, 52, 4);
+    rect(BASE_W / 2 - 200, 78, 400, 52, 9);
     fill(255, alpha);
     textAlign(CENTER);
-    textSize(12);
-    text("내려야 할 정류장", width / 2, 96);
-    textSize(18);
+    textSize(14);
+    text("내려야 할 정류장", BASE_W / 2, 94.5);
+    textSize(19);
+    textStyle(BOLD);
     fill(255, 226, 98, alpha);
-    text(targetAnnounce.name, width / 2, 118);
+    text(targetAnnounce.name, BASE_W / 2, 117);
+    textStyle(NORMAL);
   }
 }
 
@@ -610,24 +682,36 @@ function drawHUD() {
 function handleBellPress() {
   if (!gameStarted || gamePhase !== "playing") return;
 
+  // 클릭 좌표를 기준 해상도로 역변환
+  let offsetX = (windowWidth - BASE_W * scaleRatio) / 2;
+  let offsetY = (windowHeight - BASE_H * scaleRatio) / 2;
+  let mx = (mouseX - offsetX) / scaleRatio;
+  let my = (mouseY - offsetY) / scaleRatio;
+
   // 벨 위치 클릭 확인
   let pressedBell = false;
   for (let b of bells) {
     if (!b.active) continue;
-    if (
-      mouseX > b.x &&
-      mouseX < b.x + b.w &&
-      mouseY > b.y &&
-      mouseY < b.y + b.h
-    ) {
+    if (mx > b.x && mx < b.x + b.w && my > b.y && my < b.y + b.h) {
       pressedBell = true;
       break;
     }
   }
   if (!pressedBell) return;
+
+  // 유령 벨 켜진 상태에서 또 누르면 → 패널티
+  if (ghostBellActive && !bellPressed) {
+    ghostBellActive = false;
+    ghostBellPenalty = true;
+    bellPressed = true;
+    for (let b of bells) b.pressedTimer = 999;
+    bellSound.play();
+    return;
+  }
+
   if (bellPressed) return; // 이미 눌린 상태면 무시
 
-  // 벨 클릭 즉시 켜기 (정답/오답 상관없이)
+  // 벨 클릭 즉시 켜기
   bellPressed = true;
   for (let b of bells) b.pressedTimer = 999;
   bellSpecialTimer = 0;
@@ -637,25 +721,33 @@ function handleBellPress() {
   let busRight = 100 + BUS_W;
 
   if (!target || target.x <= busRight - 80) {
-    // 오답 (목표 없음 or 이미 지나침) → 게임오버
     startGameOverSequence();
     return;
   }
 
   // 정답
   score++;
-  speed = min(speed + SPEED_INCREMENT, SPEED_MAX);
+  if (ghostBellPenalty) {
+    speed = 2;
+    ghostBellPenalty = false;
+  } else {
+    speed = min(speed + SPEED_INCREMENT, SPEED_MAX);
+  }
   target.isTarget = false;
   target.wasTarget = true;
+  ghostBellActive = false;
 
-  // 다음 목표 이름을 시퀀스에서 찾아서 미리 설정
-  // stops에 이미 스폰된 다음 목표가 있으면 그걸 사용
+  // 15점 이후 다음 유령 벨 발동 점수 설정
+  if (score >= 15 && nextGhostScore <= score) {
+    nextGhostScore = score + rndInt(4, 6);
+  }
+
+  // 다음 목표 이름 설정
   let nextTarget = stops.find((s) => s.isTarget && s.x > 100 + BUS_W);
   if (nextTarget) {
     pendingTargetName = nextTarget.name;
     targetAnnounce.name = nextTarget.name;
   } else {
-    // 아직 스폰 안 됐으면 시퀀스에서 다음 isTarget 이름 peek
     for (let i = seqIndex; i < stopSequence.length; i++) {
       if (stopSequence[i].isTarget) {
         pendingTargetName = stopSequence[i].name;
@@ -681,22 +773,23 @@ function startGameOverSequence() {
 }
 
 // ── 타이틀 화면 ───────────────────────────
-function drawTitle() {
+/*function drawTitle() {
   background(255);
   textAlign(CENTER, CENTER);
 
   fill(50, 30, 10);
   textSize(48);
-  text("game start", width / 2, height / 2 - 80);
+  text("game start", BASE_W / 2, BASE_H / 2 - 80);
 
   textSize(20);
   fill(80);
-  text("가야하는 정류장에 맞게 벨을 누르자", width / 2, height / 2 - 20);
+  text("가야하는 정류장에 맞게 벨을 누르자", BASE_W / 2, BASE_H / 2 - 20);
 
   fill(200, 50, 50);
   textSize(26);
-  text("클릭하여 시작", width / 2, height / 2 + 80);
+  text("클릭하여 시작", BASE_W / 2, BASE_H / 2 + 80);
 }
+  */
 
 // ── Firebase 리더보드 저장 ────────────────
 // index.html에서 Firebase SDK를 로드한 후 sketch.js를 불러와야 함
@@ -734,71 +827,90 @@ async function saveScoreToFirebase(name, s) {
 let scoreSaved = false;
 
 function drawGameOver() {
+  textFont("Gowun Dodum");
   background(255);
 
-  textAlign(CENTER, CENTER);
-  fill(255, 80, 80);
-  textSize(52);
-  text("GAME OVER", width / 2, height / 2 - 130);
+  // textAlign(CENTER, CENTER);
+  // fill(255, 80, 80);
+  // textSize(52);
+  // text("GAME OVER", BASE_W / 2, BASE_H / 2 - 130);
+  image(gameOverImg, BASE_W / 2 - 225, BASE_H / 2 - 200, 450, 67);
 
   fill(20);
-  textSize(26);
-  text(`점수: ${score}`, width / 2, height / 2 - 75);
+  textSize(28);
+  text(`점수: ${score}`, BASE_W / 2, BASE_H / 2 - 75);
 
-  // 이름 입력창
-  fill(nameInputActive ? color(234, 233, 233) : color(244, 244, 244));
-  rectMode(CENTER);
-  rect(width / 2, height / 2, 320, 46, 3);
-  rectMode(CORNER);
-  noStroke();
+  // 이름 입력창 배경 (HTML input이 위에 올라탐)
+  // fill(nameInputActive ? color(234, 233, 233) : color(244, 244, 244));
+  // noStroke();
+  // rectMode(CENTER);
+  // rect(BASE_W / 2, BASE_H / 2, 320, 46, 3);
+  // rectMode(CORNER);
+  image(nametag, BASE_W / 2 - 160, BASE_H / 2 - 23, 320, 46);
 
-  fill(playerName ? 20 : 150);
-  textSize(18);
-  textAlign(CENTER, CENTER);
-  text(
-    playerName
-      ? playerName + (nameInputActive ? "|" : "")
-      : "이름을 입력하세요",
-    width / 2,
-    height / 2,
-  );
+  // HTML input 위치를 스케일 기준으로 업데이트
+  if (nameInput) {
+    let canvas = document.querySelector("canvas");
+    let rect = canvas.getBoundingClientRect();
+    let offsetX = (windowWidth - BASE_W * scaleRatio) / 2;
+    let offsetY = (windowHeight - BASE_H * scaleRatio) / 2;
+    let inputX = rect.left + offsetX + (BASE_W / 2 - 150) * scaleRatio;
+    let inputY = rect.top + offsetY + (BASE_H / 2 - 13) * scaleRatio;
+    nameInput.position(inputX, inputY);
+    nameInput.style("width", 300 * scaleRatio + "px");
+    nameInput.style("font-size", 18 * scaleRatio + "px");
+    if (gamePhase === "ended") nameInput.show();
+  }
 
-  // 기록 저장 버튼
-  let savedColor = scoreSaved ? color(252, 105, 124) : color(105, 140, 141);
-  fill(savedColor);
-  noStroke();
-  rectMode(CENTER);
-  rect(width / 2, height / 2 + 64, 220, 44, 3);
-  rectMode(CORNER);
-  fill(255);
-  textSize(17);
-  textAlign(CENTER, CENTER);
-  text(scoreSaved ? "저장 완료" : "기록 저장", width / 2, height / 2 + 64);
+  // 역변환된 마우스 좌표
+  let offsetX = (windowWidth - BASE_W * scaleRatio) / 2;
+  let offsetY = (windowHeight - BASE_H * scaleRatio) / 2;
+  let mx = (mouseX - offsetX) / scaleRatio;
+  let my = (mouseY - offsetY) / scaleRatio;
 
-  // 리더보드 버튼
-  fill(51, 53, 75);
-  noStroke();
-  rectMode(CENTER);
-  rect(width / 2, height / 2 + 120, 220, 44, 3);
-  rectMode(CORNER);
-  fill(255);
-  textSize(17);
-  textAlign(CENTER, CENTER);
-  text("순위 보기", width / 2, height / 2 + 120);
+  // 버튼 정의 [img, cy, label]
+  let buttons = [
+    {
+      img: button1,
+      cy: BASE_H / 2 + 64,
+      label: scoreSaved ? "저장 완료" : "기록 저장",
+    },
+    { img: button2, cy: BASE_H / 2 + 120, label: "순위 보기" },
+    { img: button3, cy: BASE_H / 2 + 185, label: "다시 시작" },
+  ];
+  let bw = 129,
+    bh = 45;
 
-  // 다시 시작
-  fill(125, 141, 143);
-  textSize(15);
-  textAlign(CENTER, CENTER);
-  text("다시 시작", width / 2, height / 2 + 185);
+  for (let btn of buttons) {
+    let hovering =
+      mx > BASE_W / 2 - bw / 2 &&
+      mx < BASE_W / 2 + bw / 2 &&
+      my > btn.cy - bh / 2 &&
+      my < btn.cy + bh / 2;
+    let scale = hovering ? 1.05 : 1.0;
+    let w = bw * scale,
+      h = bh * scale;
+    image(btn.img, BASE_W / 2 - w / 2, btn.cy - h / 2, w, h);
+    fill(0);
+    noStroke();
+    textSize(17 * scale);
+    textAlign(CENTER, CENTER);
+    text(btn.label, BASE_W / 2, btn.cy);
+  }
 }
 
 // ── 입력 처리 ─────────────────────────────
 function mousePressed() {
-  // 첫 클릭 시 배경음악 재생 (브라우저 자동재생 정책 대응)
+  // 첫 클릭 시 배경음악 재생
   if (bgMusic && !bgMusic.isPlaying() && !gameOver) {
     bgMusic.play();
   }
+
+  // 실제 클릭 좌표를 기준 해상도 좌표로 역변환
+  let offsetX = (windowWidth - BASE_W * scaleRatio) / 2;
+  let offsetY = (windowHeight - BASE_H * scaleRatio) / 2;
+  let mx = (mouseX - offsetX) / scaleRatio;
+  let my = (mouseY - offsetY) / scaleRatio;
 
   if (!gameStarted) {
     gameStarted = true;
@@ -809,21 +921,22 @@ function mousePressed() {
   if (gamePhase === "ended") {
     // 이름 입력창 클릭
     if (
-      mouseX > width / 2 - 160 &&
-      mouseX < width / 2 + 160 &&
-      mouseY > height / 2 - 23 &&
-      mouseY < height / 2 + 23
+      mx > BASE_W / 2 - 160 &&
+      mx < BASE_W / 2 + 160 &&
+      my > BASE_H / 2 - 23 &&
+      my < BASE_H / 2 + 23
     ) {
       nameInputActive = true;
+      if (nameInput) nameInput.elt.focus();
       return;
     }
 
     // 기록 저장 버튼
     if (
-      mouseX > width / 2 - 110 &&
-      mouseX < width / 2 + 110 &&
-      mouseY > height / 2 + 42 &&
-      mouseY < height / 2 + 86
+      mx > BASE_W / 2 - 110 &&
+      mx < BASE_W / 2 + 110 &&
+      my > BASE_H / 2 + 42 &&
+      my < BASE_H / 2 + 86
     ) {
       let name = playerName.trim() || "익명";
       saveScoreToFirebase(name, score).then((ok) => {
@@ -833,23 +946,39 @@ function mousePressed() {
       return;
     }
 
-    // 리더보드 버튼 → leaderboard.html 열기
+    // 리더보드 버튼
     if (
-      mouseX > width / 2 - 110 &&
-      mouseX < width / 2 + 110 &&
-      mouseY > height / 2 + 98 &&
-      mouseY < height / 2 + 142
+      mx > BASE_W / 2 - 110 &&
+      mx < BASE_W / 2 + 110 &&
+      my > BASE_H / 2 + 98 &&
+      my < BASE_H / 2 + 142
     ) {
       window.open("leaderboard.html", "_blank");
       return;
     }
 
-    // 다시 시작 텍스트 클릭 or 빈 곳
+    // 다시 시작 버튼
+    if (
+      mx > BASE_W / 2 - 110 &&
+      mx < BASE_W / 2 + 110 &&
+      my > BASE_H / 2 + 163 &&
+      my < BASE_H / 2 + 207
+    ) {
+      nameInputActive = false;
+      scoreSaved = false;
+      showLeaderboard = false;
+      playerName = "";
+      if (nameInput) {
+        nameInput.value("");
+        nameInput.hide();
+      }
+      initGame();
+      return;
+    }
+
+    // 다른 곳 클릭 시 포커스 해제
     nameInputActive = false;
-    scoreSaved = false;
-    showLeaderboard = false;
-    playerName = "";
-    initGame();
+    if (nameInput) nameInput.elt.blur();
     return;
   }
 
@@ -860,23 +989,18 @@ function mousePressed() {
 
 function keyPressed() {
   if (gamePhase === "ended" && nameInputActive) {
-    if (keyCode === BACKSPACE) {
-      playerName = playerName.slice(0, -1);
-    } else if (keyCode === ENTER) {
+    if (keyCode === ENTER) {
       let name = playerName.trim() || "익명";
       saveScoreToFirebase(name, score).then((ok) => {
         if (ok) scoreSaved = true;
       });
       nameInputActive = false;
-    } else if (key.length === 1 && playerName.length < 10) {
-      playerName += key;
+      if (nameInput) nameInput.elt.blur();
     }
-    return false;
   }
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
-  busY = height - BUS_H - 220;
-  initGame();
+  scaleRatio = min(windowWidth / BASE_W, windowHeight / BASE_H);
 }

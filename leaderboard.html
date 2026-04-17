@@ -11,13 +11,14 @@
         box-sizing: border-box;
       }
       body {
-        font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-        background: #f9f9f9;
-        min-height: 100vh;
+        margin: 0;
         display: flex;
         flex-direction: column;
+        justify-content: flex-end;
         align-items: center;
-        padding: 40px 20px;
+        min-height: 100vh;
+        background: #ffffff;
+        font-family: "Gowun Dodum";
       }
       h1 {
         font-size: 2rem;
@@ -29,13 +30,12 @@
         font-size: 0.95rem;
         margin-bottom: 32px;
       }
-      .board {
-        width: 100%;
-        max-width: 540px;
-        background: #fff;
-        border-radius: 8px;
-        /* box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1); */
-        overflow: hidden;
+      .wrapper {
+        position: relative;
+        width: 840px; /* scoreScreen.png 가로 크기에 맞게 조절 */
+        height: 700px; /* scoreScreen.png 세로 크기에 맞게 조절 */
+        background: url("scoreScreen.png") no-repeat center / contain;
+        margin: 0 auto; /* 추가 */
       }
       .board-header {
         background: #1d1d26;
@@ -46,10 +46,23 @@
         display: flex;
         justify-content: space-between;
       }
+      .board-list {
+        position: absolute;
+        top: 200px; /* 글자 시작 위치, 이미지 보면서 조절 */
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80%;
+        text-align: center;
+      }
+      .entry {
+        margin-bottom: 20px;
+        font-size: 1rem;
+        color: #222;
+      }
       .entry {
         display: flex;
         align-items: center;
-        padding: 14px 24px;
+        padding: 15px 25px;
         border-bottom: 1px solid #f9f9f9;
       }
       .entry:last-child {
@@ -77,7 +90,7 @@
         font-weight: 500;
       }
       .score {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         font-weight: bold;
         color: #d92c4f;
         margin-right: 16px;
@@ -132,15 +145,10 @@
     </style>
   </head>
   <body>
-    <h1>Bus Bell Game</h1>
-    <p class="subtitle">전체 플레이어 상위 5명</p>
+    <h1 class="subtitle">전체 플레이어 상위 5명</h1>
 
-    <div class="board">
-      <div class="board-header">
-        <span>Player</span>
-        <span>Score</span>
-      </div>
-      <div id="boardList"><div class="loading">Loading...</div></div>
+    <div class="wrapper">
+      <div class="board-list" id="boardList"></div>
     </div>
 
     <div class="btns">
