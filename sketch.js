@@ -154,7 +154,8 @@ function buildSequence() {
 // 큐가 20개 이하로 줄면 새 시퀀스를 뒤에 추가
 function refillIfNeeded() {
   if (stopSequence.length - seqIndex < 20) {
-    stopSequence = stopSequence.slice(seqIndex).concat(buildSequence());
+    let remaining = stopSequence.slice(seqIndex);
+    stopSequence = remaining.concat(buildSequence());
     seqIndex = 0;
   }
 }
@@ -258,6 +259,7 @@ function setup() {
   busY = BASE_H - BUS_H - 220;
 
   bgMusic.setLoop(true);
+  bgMusic.setVolume(1.0);
   userStartAudio();
 
   // 한글 입력을 위한 HTML input 요소 생성
@@ -375,6 +377,11 @@ function makeBell(type, isRandom) {
 
 // ── draw ─────────────────────────────────
 function draw() {
+  // 배경음악 끊김 방지 - 게임 중에만 재생 체크
+  if (bgMusic && !bgMusic.isPlaying() && !gameOver && gamePhase !== "ended") {
+    bgMusic.play();
+  }
+
   // 레터박스 배경
   background(30);
 
@@ -435,6 +442,12 @@ function updateStops() {
       announcement.timer = 180;
     }
 
+    // 목표 정류장을 벨 안 누르고 지나침 → 게임오버
+    if (s.isTarget && !s.wasTarget && !s.passed && s.x + s.w < busRight) {
+      startGameOverSequence();
+      return;
+    }
+
     // 버스가 정류장을 지나쳤을 때
     if (!s.passed && s.x + s.w < busRight) {
       s.passed = true;
@@ -443,12 +456,6 @@ function updateStops() {
       bellPressed = false;
       ghostBellActive = false;
       for (let b of bells) b.pressedTimer = 0;
-
-      // 목표 정류장을 벨 안 누르고 지나침 → 게임오버
-      if (s.isTarget && !s.wasTarget) {
-        startGameOverSequence();
-        return;
-      }
 
       // 목표 정류장 정답 통과 → 다음 목표 안내 + 스페셜 발동
       if (s.wasTarget) {
@@ -482,9 +489,11 @@ function pickStageSpeed() {
     // 13점 이하: 점수마다 고정 증가
     speed = min(2.4 + score * 0.5, SPEED_MAX);
   } else {
-    // 13점 이후: 스테이지마다 랜덤
-    let base = 2.4 + score * 0.18;
-    let variation = rndInt(-5, 5) * 0.1;
+    // 13점 이후: 기본 속도는 계속 증가, ±1 랜덤으로 빠르고 느림이 명확하게
+    let base = 8.9 + (score - 13) * 0.15;
+    // -1 ~ +1 사이에서 0.5 단위로 뽑아 명확한 차이
+    let steps = [-2, -1, -1, 0, 0, 1, 1, 2]; // 느림/보통/빠름 가중치
+    let variation = steps[rndInt(0, steps.length - 1)] * 0.5;
     speed = min(max(base + variation, 2), SPEED_MAX);
   }
 }
@@ -565,12 +574,12 @@ function updateBells() {
     nextGhostScore > 0 &&
     score >= nextGhostScore
   ) {
-    let target = stops.find((s) => s.isTarget);
+    let target = stops.find((s) => s.isTarget && !s.passed);
     if (target && target.x > 100 + BUS_W + 200) {
       ghostBellActive = true;
       bellSound.play();
-    } else if (!target) {
-      // 타겟이 아직 없으면 잠시 대기 (다음 프레임에 재시도)
+      // 발동 후 다음 스케줄 즉시 설정
+      nextGhostScore = score + rndInt(4, 6);
     }
   }
 }
@@ -747,9 +756,10 @@ function handleBellPress() {
   target.wasTarget = true;
   ghostBellActive = false;
 
-  // 15점 도달 시 또는 이후 nextGhostScore 설정
+  // 15점 이후: 다음 유령벨 스케줄 설정
   if (score >= 15) {
-    if (nextGhostScore <= score) {
+    if (nextGhostScore === 0) {
+      // 첫 설정
       nextGhostScore = score + rndInt(4, 6);
     }
   }
@@ -969,7 +979,13 @@ function mousePressed() {
       my > BASE_H / 2 + 98 &&
       my < BASE_H / 2 + 142
     ) {
-      window.open("leaderboard.html", "_blank");
+      window.open(
+        "leaderboard.html?score=" +
+          score +
+          "&name=" +
+          encodeURIComponent(playerName.trim() || "익명"),
+        "_blank",
+      );
       return;
     }
 

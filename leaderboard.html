@@ -56,7 +56,7 @@
       .board-list {
         position: absolute;
         top: 28%;
-        left: 50%;
+        left: 50.3%;
         transform: translateX(-50%);
         width: 40%;
         text-align: center;
@@ -64,7 +64,7 @@
       .entry {
         display: flex;
         align-items: center;
-        padding: 1.4vw 1.4vw;
+        padding: 1.1vw 1.1vw;
         border-bottom: 1px solid #161515;
       }
       .entry:last-child {
@@ -114,6 +114,37 @@
         padding: 40px;
         text-align: center;
         color: #c9cbcb;
+      }
+      .my-score {
+        position: absolute;
+        top: 71%;
+        left: 50.3%;
+        transform: translateX(-50%);
+        width: 40%;
+        display: flex;
+        align-items: center;
+        padding: 1vw 1.4vw;
+
+        background: rgba(212, 50, 88, 0.08);
+        border-radius: 4px;
+      }
+      .my-score .rank {
+        font-size: 1.3vw;
+        width: 3vw;
+        font-weight: bold;
+        color: #d43258;
+      }
+      .my-score .name {
+        flex: 1;
+        font-size: 1.1vw;
+        color: #16161a;
+        font-weight: 500;
+      }
+      .my-score .score {
+        font-size: 1.2vw;
+        font-weight: bold;
+        color: #d92c4f;
+        margin-right: 0.7vw;
       }
       .btn {
         margin-top: 20px;
@@ -167,6 +198,7 @@
     <div class="wrapper">
       <p class="subtitle">전체 플레이어 상위 5명</p>
       <div class="board-list" id="boardList"></div>
+      <div class="my-score" id="myScore"></div>
     </div>
 
     <div class="btns">
@@ -217,6 +249,14 @@
       async function loadBoard() {
         const list = document.getElementById("boardList");
         list.innerHTML = '<div class="loading">불러오는 중...</div>';
+
+        // URL에서 내 점수, 이름 파싱
+        const params = new URLSearchParams(window.location.search);
+        const myScoreVal = parseInt(params.get("score")) || 0;
+        const myName = params.get("name")
+          ? decodeURIComponent(params.get("name"))
+          : "익명";
+
         try {
           const q = query(
             collection(db, "scores"),
@@ -227,20 +267,38 @@
           if (snap.empty) {
             list.innerHTML =
               '<div class="empty">아직 기록이 없어요!<br>게임을 플레이하고 이름을 남겨보세요</div>';
-            return;
+          } else {
+            let html = "";
+            snap.docs.forEach((doc, i) => {
+              const d = doc.data();
+              html += `
+              <div class="entry">
+                <div class="rank ${rankClass[i]}">${rankLabel[i]}</div>
+                <div class="name">${esc(d.name)}</div>
+                <div class="score">${d.score}점</div>
+                <div class="date">${d.date || ""}</div>
+              </div>`;
+            });
+            list.innerHTML = html;
           }
-          let html = "";
-          snap.docs.forEach((doc, i) => {
-            const d = doc.data();
-            html += `
-            <div class="entry">
-              <div class="rank ${rankClass[i]}">${rankLabel[i]}</div>
-              <div class="name">${esc(d.name)}</div>
-              <div class="score">${d.score}점</div>
-              <div class="date">${d.date || ""}</div>
-            </div>`;
-          });
-          list.innerHTML = html;
+
+          // 내 순위 계산
+          if (params.get("score") !== null) {
+            const allQ = query(
+              collection(db, "scores"),
+              orderBy("score", "desc"),
+            );
+            const allSnap = await getDocs(allQ);
+            let myRank = 1;
+            allSnap.docs.forEach((doc) => {
+              if (doc.data().score > myScoreVal) myRank++;
+            });
+            document.getElementById("myScore").innerHTML = `
+              <div class="rank">${myRank}위</div>
+              <div class="name">${esc(myName)}</div>
+              <div class="score">${myScoreVal}점</div>
+            `;
+          }
         } catch (e) {
           list.innerHTML = `<div class="empty">불러오기 실패<br>${e.message}</div>`;
         }
